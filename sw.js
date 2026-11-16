@@ -1,6 +1,6 @@
 // SP03 service worker: offline cache + Android "Share to SP02" receiver
-const VERSION = 'sp03-v2';
-const SHELL = ['./', './index.html', './app.js', './manifest.webmanifest',
+const VERSION = 'sp03-v3';
+const SHELL = ['./', './index.html', './updater.js', './app.js', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './maskable-512.png', './favicon.png',
   './db.js', './tags.js', './ffmpeg.js', './classes.js', './const.js', './errors.js', './types.js', './utils.js', './worker.js'];
 const SHARE_CACHE = 'sp03-share';
