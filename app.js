@@ -14,7 +14,7 @@ const I18N = {
     tagline: 'Music Player', install: 'Install', songs: 'Songs', albums: 'Albums', artists: 'Artists', playlists: 'Playlists', genres: 'Genres', folders: 'Folders',
     eq: 'Equalizer', lyrics: 'Lyrics', queue: 'Queue', sleep: 'Sleep', viz: 'Visualizer', search: 'Search songs, artists, albums',
     heroTitle: 'All your music,<br><span>one player</span>', heroSub: 'Plays in the background with lock-screen controls. Nothing is uploaded.',
-    addMusic: 'Add music', addFolder: 'Add a folder (PC)', bgTip: 'Tip: install the app so music keeps playing when the screen is off.',
+    addMusic: 'Add music', addFolder: 'Add a folder (PC)', scanPhone: 'Show all songs on this phone', scanNote: 'SP03 only reads your songs to list and play them. Nothing is uploaded.', scanning: 'Finding songs on the phone…', whereDevice: 'Phone storage', rescanPhone: 'Find phone songs again', phoneFound: 'songs found on the phone', bgTip: 'Tip: install the app so music keeps playing when the screen is off.',
     b1: '🎧 Background play', b2: '🎚 10-band EQ', b3: '🔊 Bass + 3D', b4: '📃 Lyrics', b5: '🔀 Crossfade', b6: '⏾ Sleep timer', b7: '📂 Playlists', b8: '🎵 Any format',
     found: 'songs found', saveQ: 'Save them to your library? Saved songs stay in the app even after closing.', saveLib: '💾 Save to library', justPlay: '▶ Just play now',
     saveNote: 'Uses the same space on your phone as the songs.', reading: 'Reading songs…', saved: 'saved to library', play: 'Play',
@@ -41,7 +41,7 @@ const I18N = {
     tagline: 'म्यूज़िक प्लेयर', install: 'इंस्टॉल', songs: 'गाने', albums: 'एल्बम', artists: 'कलाकार', playlists: 'प्लेलिस्ट', genres: 'शैली', folders: 'फ़ोल्डर',
     eq: 'इक्वलाइज़र', lyrics: 'बोल', queue: 'कतार', sleep: 'स्लीप', viz: 'विज़ुअलाइज़र', search: 'गाना, कलाकार, एल्बम खोजें',
     heroTitle: 'आपका सारा संगीत,<br><span>एक प्लेयर</span>', heroSub: 'स्क्रीन बंद होने पर भी चलता है, लॉक स्क्रीन पर कंट्रोल। कुछ भी अपलोड नहीं होता।',
-    addMusic: 'गाने जोड़ें', addFolder: 'फ़ोल्डर जोड़ें (PC)', bgTip: 'सुझाव: ऐप इंस्टॉल करें ताकि स्क्रीन बंद होने पर भी गाना चलता रहे।',
+    addMusic: 'गाने जोड़ें', addFolder: 'फ़ोल्डर जोड़ें (PC)', scanPhone: 'इस फ़ोन के सारे गाने दिखाएँ', scanNote: 'SP03 सिर्फ़ आपके गानों की लिस्ट बनाने और चलाने के लिए पढ़ता है। कुछ भी अपलोड नहीं होता।', scanning: 'फ़ोन में गाने खोजे जा रहे हैं…', whereDevice: 'फ़ोन स्टोरेज', rescanPhone: 'फ़ोन के गाने फिर से खोजें', phoneFound: 'गाने फ़ोन में मिले', bgTip: 'सुझाव: ऐप इंस्टॉल करें ताकि स्क्रीन बंद होने पर भी गाना चलता रहे।',
     b1: '🎧 बैकग्राउंड प्ले', b2: '🎚 10-बैंड EQ', b3: '🔊 बास + 3D', b4: '📃 बोल (Lyrics)', b5: '🔀 क्रॉसफ़ेड', b6: '⏾ स्लीप टाइमर', b7: '📂 प्लेलिस्ट', b8: '🎵 हर फ़ॉर्मेट',
     found: 'गाने मिले', saveQ: 'इन्हें लाइब्रेरी में सेव करें? सेव किए गाने ऐप बंद करने के बाद भी रहेंगे।', saveLib: '💾 लाइब्रेरी में सेव करें', justPlay: '▶ अभी बस चलाएँ',
     saveNote: 'फ़ोन में गानों जितनी ही जगह लगेगी।', reading: 'गाने पढ़े जा रहे हैं…', saved: 'लाइब्रेरी में सेव', play: 'चलाएँ',
@@ -110,6 +110,8 @@ const ICON = {
 const svg = (p, st = '') => `<svg class="i" viewBox="0 0 24 24" ${st}><path d="${p}"/></svg>`;
 
 /* ---------------- Library state ---------------- */
+const NATIVE = !!window.Capacitor?.isNativePlatform?.();
+const MN = NATIVE ? (window.Capacitor.Plugins?.MusicNative || window.Capacitor.registerPlugin?.('MusicNative')) : null;
 const lib = new Map();          // id -> track
 const session = new Map();      // id -> File (not saved)
 const sessionArt = new Map();   // id -> Blob
@@ -129,6 +131,7 @@ const artURLs = new Map();
 async function artURL(id) {
   if (artURLs.has(id)) return artURLs.get(id);
   const tr = lib.get(id); if (!tr || !tr.hasArt) { artURLs.set(id, null); return null; }
+  if (tr.source === 'device') { let u = null; try { u = (await MN.art({ id: tr.nid })).data; } catch {} artURLs.set(id, u); return u; }
   let b = sessionArt.get(id);
   if (!b) try { b = await db.get('art', id); } catch {}
   const u = b ? URL.createObjectURL(b) : null; artURLs.set(id, u); return u;
@@ -251,6 +254,7 @@ async function rescanFolders() {
 /* ---------------- Getting the audio data ---------------- */
 async function getBlob(tr) {
   if (tr.source === 'session') return session.get(tr.id);
+  if (tr.source === 'device' && !tr.converted) { const r = await fetch(tr.url); if (!r.ok) throw new Error('file'); return r.blob(); }
   if (tr.converted) { const c = await db.get('blobs', tr.id + '#c'); if (c) return c; }
   if (tr.source === 'saved') return db.get('blobs', tr.id);
   if (tr.source === 'folder') {
@@ -261,6 +265,44 @@ async function getBlob(tr) {
   }
   return null;
 }
+
+/* ---------------- Android app (Capacitor): phone songs + background playback ---------------- */
+function nativePos(playing) {
+  if (!MN) return; const el = cur();
+  MN.update({ playing, position: Math.round((el.currentTime || 0) * 1000), duration: Math.round((isFinite(el.duration) ? el.duration : (curTrack()?.duration || 0)) * 1000), rate: el.playbackRate || 1 }).catch(() => {});
+}
+async function deviceScan(ask) {
+  if (!MN) return;
+  try {
+    let ok = (await MN.checkAccess()).granted;
+    if (!ok && ask) ok = (await MN.requestAccess()).granted;
+    if (!ok) { if (ask) toast(t('scanNote'), 4000); return; }
+    busy(true, t('scanning'));
+    const { songs } = await MN.listSongs();
+    const seen = new Set(); let added = 0;
+    for (const x of songs) {
+      const id = 'd' + x.id; seen.add(id);
+      const old = lib.get(id);
+      const tr = Object.assign(old || { fav: false, plays: 0, lastPlayed: 0, addedAt: (x.date || 0) * 1000, lyrics: '', converted: false, genre: '', albumArtist: '' }, {
+        id, name: x.name, title: x.title || baseOf(x.name), artist: x.artist && x.artist !== '<unknown>' ? x.artist : '', album: x.album || '',
+        year: x.year ? String(x.year) : '', trackNo: (x.track || 0) % 1000, duration: (x.duration || 0) / 1000, size: x.size || 0, type: x.mime || '',
+        folder: x.folder || '', source: 'device', hasArt: true, nid: x.id, url: window.Capacitor.convertFileSrc(x.path || x.uri),
+      });
+      lib.set(id, tr); if (!old) { added++; db.put('tracks', tr).catch(() => {}); }
+    }
+    for (const tr of allTracks()) if (tr.source === 'device' && !seen.has(tr.id)) { lib.delete(tr.id); db.del('tracks', tr.id).catch(() => {}); }
+    busy(false); render();
+    if (ask || added) toast(`📱 ${songs.length} ${t('phoneFound')}`);
+  } catch (e) { busy(false); toast(String(e?.message || e).slice(0, 120), 4000); }
+}
+if (MN) MN.addListener('action', ({ action, pos }) => {
+  const el = cur();
+  if (action === 'play') { if (el.paused) togglePlay(); }
+  else if (action === 'pause') { if (!el.paused) el.pause(); }
+  else if (action === 'next') next();
+  else if (action === 'prev') prev();
+  else if (action === 'seek') { el.currentTime = (pos || 0) / 1000; setPosState(); }
+});
 
 /* ---------------- Audio engine ---------------- */
 const A = [$('#a1'), $('#a2')];
@@ -478,6 +520,7 @@ function updatePlayState() {
   const playing = !cur().paused;
   document.querySelectorAll('.pp').forEach((p) => p.setAttribute('d', playing ? ICON.pause : ICON.play));
   if ('mediaSession' in navigator) navigator.mediaSession.playbackState = playing ? 'playing' : 'paused';
+  nativePos(playing);
   if (playing && S.viz && !$('#np').classList.contains('hidden')) startViz();
 }
 function updateButtons() {
@@ -502,13 +545,14 @@ async function onTrackChange(tr) {
   updateButtons(); updatePlayState(); renderLyrics(true);
   document.querySelectorAll('.row.playing').forEach((r) => r.classList.remove('playing'));
   document.querySelectorAll(`.row[data-id="${tr.id}"]`).forEach((r) => r.classList.add('playing'));
+  if (MN) MN.update({ title: tr.title, artist: artistOf(tr), album: albumOf(tr), mediaId: tr.nid || 0, duration: Math.round((tr.duration || 0) * 1000) }).catch(() => {});
   if ('mediaSession' in navigator) {
     const art = u ? [{ src: u, sizes: '512x512', type: 'image/jpeg' }] : [{ src: 'icon-512.png', sizes: '512x512', type: 'image/png' }];
     navigator.mediaSession.metadata = new MediaMetadata({ title: tr.title, artist: artistOf(tr), album: albumOf(tr), artwork: art });
   }
 }
 function setPosState() {
-  const el = cur();
+  const el = cur(); nativePos(!el.paused);
   if ('mediaSession' in navigator && navigator.mediaSession.setPositionState && isFinite(el.duration) && el.duration > 0) {
     try { navigator.mediaSession.setPositionState({ duration: el.duration, playbackRate: el.playbackRate, position: Math.min(el.currentTime, el.duration) }); } catch {}
   }
@@ -731,7 +775,7 @@ function bindSongMenu(s, tr) {
     inp.click();
   });
   on('info', () => {
-    const where = { saved: t('whereSaved'), folder: t('whereFolder'), session: t('whereSession') }[tr.source];
+    const where = { saved: t('whereSaved'), folder: t('whereFolder'), session: t('whereSession'), device: t('whereDevice') }[tr.source];
     const rows = [[t('file'), tr.name], [t('size'), fmtSize(tr.size)], [t('duration'), fmt(tr.duration)], [t('format'), (extOf(tr.name) || '?').toUpperCase() + (tr.converted ? ' → AAC' : '')],
       [t('artists'), artistOf(tr)], [t('albums'), albumOf(tr)], [t('genres'), tr.genre || '–'], [t('year'), tr.year || '–'], [t('track'), tr.trackNo || '–'], [t('plays'), tr.plays || 0], [t('where'), where], [t('path'), tr.folder || t('device')]];
     openSheet(t('info'), `<div class="info">${rows.map(([a, b]) => `<b>${esc(a)}:</b> ${esc(b)}`).join('<br>')}</div>`);
@@ -812,7 +856,8 @@ const playBar = (n, extra = '') => `<div class="toolbar"><span class="grow">${n}
 function renderEmpty() {
   return `<div class="empty"><img src="icon-512.png" alt=""><h2>${t('heroTitle')}</h2><p>${esc(t('heroSub'))}</p>
     <div class="features">${['b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8'].map((k) => `<span class="badge">${esc(t(k))}</span>`).join('')}</div>
-    <button class="btn primary" data-act="add">🎵 ${esc(t('addMusic'))}</button>
+    ${NATIVE ? `<button class="btn primary" data-act="scan">📱 ${esc(t('scanPhone'))}</button><p style="font-size:12px;margin:6px 0 10px">${esc(t('scanNote'))}</p>` : ''}
+    <button class="btn ${NATIVE ? 'ghost' : 'primary'}" data-act="add">🎵 ${esc(t('addMusic'))}</button>
     ${'showDirectoryPicker' in window ? `<button class="btn ghost" data-act="folder">📁 ${esc(t('addFolder'))}</button>` : ''}
     <p style="margin-top:16px;font-size:13px">${esc(t('bgTip'))}</p></div>`;
 }
@@ -891,6 +936,7 @@ $('#view').addEventListener('click', (e) => {
   const menu = e.target.closest('[data-menu]'); if (menu) { e.stopPropagation(); openSongMenu(menu.dataset.menu); return; }
   const act = e.target.closest('[data-act]')?.dataset.act;
   if (act === 'add') { $('#fileIn').click(); return; }
+  if (act === 'scan') { deviceScan(true); return; }
   if (act === 'folder') { addFolder(); return; }
   if (act === 'playall') { playList(listCtx, 0, listLabel); openNP(); return; }
   if (act === 'shuf') { if (!S.shuffle) setShuffle(true); playList(listCtx, Math.floor(Math.random() * listCtx.length), listLabel); openNP(); return; }
@@ -925,6 +971,7 @@ $('#setBtn').onclick = async () => {
     <div class="row2" style="margin-top:14px"><span style="flex:1">${esc(t('resume'))}</span>${sw('resSw', S.resume)}</div>
     <div class="sec">${esc(t('crossfade'))}</div>${chips([0, 2, 4, 6, 8, 10, 12].map((x) => [x, x ? x + ' ' + t('sec') : t('off')]), S.crossfade, 'cf')}
     <div class="sec">${esc(t('storage'))}</div><p class="info">${esc(used)} · ${lib.size} ${esc(t('songs'))}</p>
+    ${NATIVE ? `<button class="mi" data-a="phone"><span class="e">📱</span>${esc(t('rescanPhone'))}</button>` : ''}
     ${'showDirectoryPicker' in window ? `<button class="mi" data-a="rescan"><span class="e">🔄</span>${esc(t('folderRescan').replace('🔄 ', ''))}</button>` : ''}
     <button class="mi" data-a="clear"><span class="e">🗑</span><span id="clrTxt">${esc(t('clearLib').replace('🗑 ', ''))}</span></button>
     <p class="info" style="margin-top:12px;font-size:12px;text-align:center">SP03 · v1</p>`, (s) => {
@@ -932,6 +979,7 @@ $('#setBtn').onclick = async () => {
     s.querySelector('#resSw').onchange = (e) => { S.resume = e.target.checked; saveS(); };
     s.querySelectorAll('[data-cf]').forEach((b) => b.onclick = () => { S.crossfade = +b.dataset.cf; saveS(); s.querySelectorAll('[data-cf]').forEach((c) => c.classList.toggle('on', c === b)); });
     s.querySelector('[data-a=rescan]')?.addEventListener('click', () => { closeSheet(); rescanFolders(); });
+    s.querySelector('[data-a=phone]')?.addEventListener('click', () => { closeSheet(); deviceScan(true); });
     s.querySelector('[data-a=clear]').onclick = async () => {
       if (!sure) { sure = true; s.querySelector('#clrTxt').textContent = t('clearSure'); return; }
       cur().pause(); for (const st of ['tracks', 'blobs', 'art', 'playlists', 'kv']) await db.clear(st).catch(() => {});
@@ -969,7 +1017,7 @@ async function convertAndPlay(tr, i) {
   busy(true, t('converting'), t('convertNote'));
   try {
     try { await ensureEngine(); } catch { throw new Error(t('errEngine')); }
-    const src = tr.source === 'session' ? session.get(tr.id) : tr.source === 'saved' ? await db.get('blobs', tr.id) : await tr.handle.getFile();
+    const src = tr.source === 'session' ? session.get(tr.id) : tr.source === 'saved' ? await db.get('blobs', tr.id) : tr.source === 'device' ? await (await fetch(tr.url)).blob() : await tr.handle.getFile();
     const inFile = new File([src], 'in.' + (extOf(tr.name) || 'bin'));
     try { await ff.createDir('/in'); } catch {}
     let mounted = false, path;
@@ -1012,7 +1060,7 @@ let deferredPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; $('#installBtn').classList.remove('hidden'); });
 $('#installBtn').onclick = async () => { if (!deferredPrompt) return; deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; $('#installBtn').classList.add('hidden'); };
 window.addEventListener('appinstalled', () => $('#installBtn').classList.add('hidden'));
-if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+if ('serviceWorker' in navigator && !NATIVE) navigator.serviceWorker.register('./sw.js').catch(() => {});
 setInterval(() => { if (!cur().paused) saveQueue(); }, 5000);
 window.addEventListener('pagehide', saveQueue);
 
@@ -1032,6 +1080,7 @@ window.addEventListener('pagehide', saveQueue);
     }
   }
   receiveShared();
+  if (NATIVE) deviceScan(false);
 })();
 
 // Small read-only hook used by automated tests

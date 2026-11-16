@@ -36,5 +36,12 @@ Har format ka music, screen band hone par bhi chalta hai. Kuch upload nahi hota.
 - Online lyrics/album photo search nahi hai (sirf gaane ke andar ya .lrc file se).
 - Pehli baar WMA/AMR jaise format ke liye converter (~31 MB) internet se aata hai.
 
+## 📲 Android app (APK)
+https://github.com/Sandeep-1407/sp03-music/releases/latest/download/SP03-Music.apk
+- Phone ke **saare gaane apne aap** dikhte hain (Songs / Albums / Artists / Folders) – kuch jodna nahi padta
+- Screen band ya app peeche hone par bhi gaana chalta rehta hai; notification aur lock screen par ⏮ ⏯ ⏭ buttons
+- Headphone nikalte hi gaana ruk jata hai
+- GitHub Actions (`.github/workflows/android.yml`) se banta hai: Capacitor 7 + `MusicNativePlugin.java` + `PlaybackService.java`
+
 ---
 Created by - Sandeep Kumar from Sandeep Jan Seva Kendra, Mob no. 8299430081
